@@ -4,12 +4,13 @@
 # Load packages
 library(dplyr)
 library(ggplot2)
-library(eeptools) # used to convert date of birth into age
-library(gridExtra) # used to combine several graphs, need to delete
-library(corrplot)
+library(eeptools) # convert date of birth into age
+library(gridExtra) # combine several graphs, need to delete
+library(corrplot) # correlation plot
 library(leaps) # regsubsets() for regression
-
-# new comment 
+library(reshape2) # melt function to change wide df to log format
+library(ggExtra)
+ 
 
 # Load four csv files into dataframes
 df_demographics <- read.csv(file = 'demographics.csv')          
@@ -23,7 +24,7 @@ df_billamount <- read.csv(file = 'bill_amount.csv')
 str(df_clinical)
 summary(df_clinical)
 
-# Medical_history_2 and medical_history_5 have missing values (N= 233 and 304)
+2# Medical_history_2 and medical_history_5 have missing values (N= 233 and 304)
 prop.table(table(df_clinical$medical_history_2, exclude = NULL))
 prop.table(table(df_clinical$medical_history_5, exclude = NULL))
 # Medical_history_2: 7% is missing value, hence treat NA as a new category instead of imputation
@@ -117,97 +118,274 @@ df_master$readmitted_status <- factor(df_master$readmitted_status)
 
 # Merge data from demographics.csv
 df_master <- merge(df_master, df_demographics, by = 'patient_id')
-df_master <- df_master[-c(34,29)] # delete unused columns: date_of_birth & daysSinceLast
-
-df_backup <- df_master # back up of df_master
+df_master <- df_master[-c(35,29)] # delete unused columns: date_of_birth & daysSinceLast
 
 # Move categorical variables to the front and continuous/discrete variables to the back
 df_master <- df_master %>%
   relocate(date_of_discharge, .before = amount) %>%
   relocate(readmitted_status, gender, race, resident_status, 
-           .before = medical_history_1) %>%
+           .before = medical_history_1)
   
 str(df_master)
 
 
-# 0. Draft ------------------------------------------------
 
-# Histogram for all continuous variables
-qplot(amount, data = df_master, bins = 50) # bill amount is right skewed, take log(amount)
-qplot(log(amount), data = df_master, bins = 50) # log(amount) approximates normal distribution
-qplot(lab_result_1, data = df_master, bins = 30)
-qplot(lab_result_2, data = df_master, bins = 30)
-qplot(lab_result_3, data = df_master, bins = 30)
-qplot(weight, data = df_master, bins = 30)
-qplot(height, data = df_master, bins = 50)
-qplot(LOS, data = df_master, bins = 30)
-qplot(age, data = df_master, bins = 30)
+# 5. Hist for continuous variables -------------------------------------------
 
-grid.arrange(p1, p2, nrow =1)
+# 5.1: bill amount
+ggplot(df_master, aes(x = amount)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white", bins = 50) + 
+  geom_density(color = "red") +
+  labs(title = "Histogram of amount")
 
-# Plots all columns - UNABLE TO SAVE THE PLOTS
-ln <- length(names(df_master))
-for (i in 4:ln){
-if(is.factor(df_master[,i])){
-  ggplot(data = df_master, aes(x = df_master[,i], y = amount)) +
-    geom_bar(stat = "identity") +
-    labs(x = names(df_master)[i])
-} else{
-  ggplot(data = df_master, aes(x = df_master[,i])) +
-    geom_histogram()
-}
-}
+ggplot(df_master, aes(x = log(amount))) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white", bins = 50) +
+  geom_density(color = "red") +
+  labs(x = "log(amount)", 
+       title = "Histogram of log(amount)")
+
+# 5.2: lab results
+hist_lb1 <- ggplot(df_master, aes(x = lab_result_1)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white", bins = 50) +
+  geom_density(color = "red") +
+  labs(title = "Histogram of lab result 1") +
+  ylim(0.00, 0.30)
+  
+hist_lb2 <- ggplot(df_master, aes(x = lab_result_2)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white", bins = 50) +
+  geom_density(color = "red") +
+  labs(title = "Histogram of lab result 2") +
+  ylim(0.00, 0.30)
+  
+hist_lb3 <-ggplot(df_master, aes(x = lab_result_3)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white", bins = 50) +
+  geom_density(color = "red") +
+  labs(title = "Histogram of lab result 3") +
+  ylim(0.00, 0.03)
+
+grid.arrange(hist_lb1, hist_lb2, hist_lb3, nrow =1)
+
+# 5.3: weight, height and bmi
+hist_weight <-ggplot(df_master, aes(x = weight)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white", bins = 50) +
+  geom_density(color = "red") +
+  labs(title = "Histogram of weight")
+
+hist_weight_gender <-ggplot(df_master, aes(x = weight, color = gender)) +
+  geom_histogram(aes(y = ..density..), fill = "white", bins = 50, position = "identity") +
+  geom_density() +
+  labs(title = "Histogram of weight by gender") +
+  theme(legend.position = "bottom")
+
+hist_height <-ggplot(df_master, aes(x = height)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white") +
+  geom_density(color = "red") +
+  labs(title = "Histogram of height")
+
+hist_height_gender <-ggplot(df_master, aes(x = height, color = gender)) +
+  geom_histogram(aes(y = ..density..), fill = "white", position = "identity") +
+  geom_density() +
+  labs(title = "Histogram of height by gender") +
+  theme(legend.position = "bottom")
+
+hist_bmi <-ggplot(df_master, aes(x = bmi)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white") +
+  geom_density(color = "red") +
+  labs(title = "Histogram of bmi")
+
+hist_bmi_gender <-ggplot(df_master, aes(x = bmi, color = gender)) +
+  geom_histogram(aes(y = ..density..), fill = "white", position = "identity") +
+  geom_density() +
+  labs(title = "Histogram of bmi by gender") +
+  theme(legend.position = "bottom")
+
+grid.arrange(hist_weight, hist_height, hist_bmi, 
+             hist_weight_gender, hist_height_gender, hist_bmi_gender,
+             nrow =2)
+# 5.4: age
+hist_age <- ggplot(df_master, aes(x = age)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white") +
+  geom_density(color = "red") +
+  labs(title = "Histogram of age")
+
+# 5.5: Length of Stay
+hist_LOS <- ggplot(df_master, aes(x = LOS)) +
+  geom_histogram(aes(y = ..density..), color = 1, fill = "white") +
+  geom_density(color = "red") +
+  labs(title = "Histogram of Length of Stay")
 
 
-# 5. Plot for every single variable------------------------------------------
+# 6. Barplot for categorical variables -----------------------------------
 
-# Self-define basic_plot function
-basic_plot <- function(i, data.frame){
-  df_plot = data.frame
-  if(is.factor(df_plot[,i])){ # if categorical variable, plot barplot
-    ggplot(data = df_plot, aes(x = df_plot[,i])) +
-      geom_bar(aes(y = (..count..)/sum(..count..))) +
-      labs(x = names(df_plot)[i]) +
-      ylab("Proportions") +
-      ylim(0, 1)
-  } else{ # if continuous variable, plot histogram
-    ggplot(data = df_plot, aes(x = df_plot[,i])) +
-      geom_histogram() +
-      labs(x = names(df_plot)[i])
-  }
-}
+# 6.1: demographic data
+bar_readmit <- ggplot(data = df_master, aes(x = readmitted_status, 
+                                            color = readmitted_status)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white", width = 0.5) +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
 
-# Histogram for continuous variables
-basic_plot(4, df_master) # Bill amount is right skewed, take log(amount)
-hist_amount <- ggplot(data = df_master, aes(x = log(df_master[,4]))) +
-  geom_histogram() +
-  labs(x = names(df_master)[4]) # log(amount) approximates normal distribution
-basic_plot(27, df_master) # Lab result 1 approximates normal distribution
-basic_plot(28, df_master) # Lab result 2 approximates normal distribution
-basic_plot(29, df_master) # Lab result 3 approximates normal distribution
-basic_plot(30, df_master) # Weight approximates normal distribution
-basic_plot(31, df_master) # Height approximates normal distribution
-basic_plot(32, df_master) # Length of stay approximates normal distribution
-basic_plot(33, df_master) # Age approximates bi-modal normal distribution
-basic_plot(34, df_master) # BMI approximates bi-modal normal distribution
+bar_gender <- ggplot(data = df_master, aes(x = gender, color = gender)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white", width = 0.5) +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
 
-# Barplots for categorical variables  
-# Barplot for re-admitted status
-bar_readmission <- basic_plot(5, df_master) 
-# Barplot for gender
-bar_gender <- basic_plot(6, df_master) # approximately equal number of female and male
-# Barplot for race
-bar_race <- basic_plot(7, df_master) # majority is Chinese, followed by Malay
-# Barplot for resident_status
-bar_resident <- basic_plot(8, df_master) # majority is Citizen, followed by PR
-# Barplot for medical history 1
-bar_mh1 <- basic_plot(9, df_master) 
-# Barplot for medical history 2
-bar_mh2 <- basic_plot(10, df_master) 
-# Barplot for medical history 3
-bar_mh3 <- basic_plot(11, df_master) 
-# Barplot for medical history 4
-bar_mh4 <- basic_plot(12, df_master) 
+bar_race <- ggplot(data = df_master, aes(x = race, color = race)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_resident <- ggplot(data = df_master, aes(x = resident_status, color = resident_status)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(bar_readmit, bar_race, bar_gender,  bar_resident, nrow = 2)
+
+# 6.2: medical history
+bar_mh1 <- ggplot(data = df_master, aes(x = medical_history_1, color = medical_history_1)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_mh2 <- ggplot(data = df_master, aes(x = medical_history_2, color = medical_history_2)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_mh3 <- ggplot(data = df_master, aes(x = medical_history_3, color = medical_history_3)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_mh4 <- ggplot(data = df_master, aes(x = medical_history_4, color = medical_history_4)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_mh5 <- ggplot(data = df_master, aes(x = medical_history_5, color = medical_history_5)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_mh6 <- ggplot(data = df_master, aes(x = medical_history_6, color = medical_history_6)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_mh7 <- ggplot(data = df_master, aes(x = medical_history_7, color = medical_history_7)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(bar_mh1, bar_mh2, bar_mh3, bar_mh4, bar_mh5, bar_mh6, bar_mh7, nrow = 2)
+
+# 6.3: preop medication
+bar_pom1 <- ggplot(data = df_master, aes(x = preop_medication_1, color = preop_medication_1)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_pom2 <- ggplot(data = df_master, aes(x = preop_medication_2, color = preop_medication_2)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_pom3 <- ggplot(data = df_master, aes(x = preop_medication_3, color = preop_medication_3)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_pom4 <- ggplot(data = df_master, aes(x = preop_medication_4, color = preop_medication_4)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_pom5 <- ggplot(data = df_master, aes(x = preop_medication_5, color = preop_medication_5)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_pom6 <- ggplot(data = df_master, aes(x = preop_medication_6, color = preop_medication_6)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(bar_pom1, bar_pom2, bar_pom3, bar_pom4, bar_pom5, bar_pom6, nrow = 2)
+
+# 6.4: symptoms
+bar_sm1 <- ggplot(data = df_master, aes(x = symptom_1, color = symptom_1)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_sm2 <- ggplot(data = df_master, aes(x = symptom_2, color = symptom_2)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+bar_sm3 <- ggplot(data = df_master, aes(x = symptom_3, color = symptom_3)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+bar_sm4 <- ggplot(data = df_master, aes(x = symptom_4, color = symptom_4)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+bar_sm5 <- ggplot(data = df_master, aes(x = symptom_5, color = symptom_5)) +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
+  ylab("Proportions") +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(bar_sm1, bar_sm2, bar_sm3, bar_sm4, bar_sm5, nrow = 2)
+
 
 # Proportions for categorical variables
 prop.table(table(df_master$medical_history_1)) # 17% yes
@@ -232,7 +410,7 @@ prop.table(table(df_master$symptom_4)) # 73% yes
 prop.table(table(df_master$symptom_5)) # 53% yes
 
 
-# 6. Univariate analysis -------------------------------------------------
+# 7. Univariate analysis -------------------------------------------------
 
 # Correlation between x variables and y
 
@@ -263,7 +441,7 @@ names(df_categorical)[c(3:6, 11, 12, 14, 18:23)]
 # gender, race, resident status, mh1, mh6, mh7, pom2, pom6, symptom 1-5
 
 
-# 7.  Multi-Variable Analysis ---------------------------------------------
+# 8.  Multi-Variable Analysis ---------------------------------------------
 
 # recode df_master into df_regression for easy editing in modelling
 df_regression <- df_master %>%
@@ -299,19 +477,24 @@ result <- cbind(model_summary$which, round(cbind(rsq=model_summary$rsq,
                                        cp=model_summary$cp, 
                                        bic=model_summary$bic, 
                                        rss=model_summary$rss), 3))
+
+par(mfrow = c(2,2))
 plot(model_summary$bic)
 plot(model_summary$cp)
 plot(model_summary$adjr2)
 plot(model_summary$rss)
 
+
 # pick model #13 as the final model considering a balance of low bic, low cp, low rss and high adjusted r square
-result[13,]
-# race, resident status, mh1, mh6, sm1, sm2, sm3, sm4, sm5, bmi, age 
-mfinal <- lm(log_amount ~ race + resident_status + mh1 + mh6 + sm1 + sm2 + sm3 +
+result[14,]
+# gender, race, resident status, mh1, mh6, sm1, sm2, sm3, sm4, sm5, bmi, age 
+model1 <- lm(log_amount ~ gender + race + resident_status + mh1 + mh6 + sm1 + sm2 + sm3 +
                sm4 + sm5 + bmi + age,
             data = df_regression)
 
+plot(model1)
 
+# Sensitivity analysis: remove outliers in bill amoun
 Q1 <- quantile(df_master$amount, .25)
 Q3 <- quantile(df_master$amount, .75)
 IQR <- IQR(df_master$amount)
@@ -357,21 +540,99 @@ mfinal2 <- lm(amount ~ race + resident_status + mh1 + mh6 + sm1 + sm2 + sm3 +
              data = no_amount_outliers)
 
 
+# 9.  Amount versus significant variables ---------------------------------
+
+# scatterplot for bmi versus amount, grouped by resident status
+amount_bmi <- ggplot(df_regression, aes(x = bmi, y = log_amount, color = resident_status))+
+  geom_point(alpha = 0.7, size = 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  geom_smooth(method = lm, se = TRUE)
+amount_bmi <- ggMarginal(amount_bmi, type = "histogram" , fill = "steelblue")
+
+amount_age <- ggplot(df_regression, aes(x = age, y = log_amount, color = resident_status))+
+  geom_point(alpha = 0.7, size = 1) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  geom_smooth(method = lm, se = TRUE) +
+  theme(axis.text.y=element_blank(),
+        axis.title.y=element_blank())
+amount_age <- ggMarginal(amount_age, type = "histogram" , fill = "steelblue")
+
+grid.arrange(amount_bmi, amount_age, nrow = 1)
+
+
+# boxplot for race versus amount, grouped by resident status
+ggplot(df_regression, aes(x = race, y = log_amount, fill = resident_status))+
+  geom_boxplot() +
+  facet_grid(gender ~ .) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# boxplot for medical histories and symptoms versus amount
+amount_mh1 <- ggplot(df_regression, aes(x = mh1, y = log_amount, fill = mh1))+
+  geom_boxplot() +
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="BuPu")
+
+amount_mh6 <- ggplot(df_regression, aes(x = mh6, y = log_amount, fill = mh6))+
+  geom_boxplot() +
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="BuPu") +
+  theme(axis.text.y=element_blank(),
+        axis.title.y=element_blank())
+
+amount_sm1 <- ggplot(df_regression, aes(x = sm1, y = log_amount, fill = sm1))+
+  geom_boxplot() +
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="BuPu") +
+  theme(axis.text.y=element_blank(),
+        axis.title.y=element_blank())
+
+amount_sm2 <- ggplot(df_regression, aes(x = sm2, y = log_amount, fill = sm2))+
+  geom_boxplot() +
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="BuPu") +
+  theme(axis.text.y=element_blank(),
+        axis.title.y=element_blank())
+
+amount_sm3 <- ggplot(df_regression, aes(x = sm3, y = log_amount, fill = sm3))+
+  geom_boxplot() +
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="BuPu") +
+  theme(axis.text.y=element_blank(),
+        axis.title.y=element_blank())
+
+amount_sm4 <- ggplot(df_regression, aes(x = sm4, y = log_amount, fill = sm4))+
+  geom_boxplot() +
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="BuPu") +
+  theme(axis.text.y=element_blank(),
+        axis.title.y=element_blank())
+
+amount_sm5 <- ggplot(df_regression, aes(x = sm5, y = log_amount, fill = sm5))+
+  geom_boxplot() +
+  theme_minimal() +
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="BuPu") +
+  theme(axis.text.y=element_blank(),
+        axis.title.y=element_blank())
+
+grid.arrange(amount_mh1, amount_mh6, amount_sm1, amount_sm2, amount_sm3, 
+             amount_sm4, amount_sm5, nrow = 1)
+
 # 0. Backup ---------------------------------------------------------------
 
-qplot(race, amount, data = df_master, geom = "boxplot")
+qplot(gender, amount, data = df_master, geom = "boxplot")
 qplot(amount, data = df_master, fill = race, bins = 50)
 qplot(amount, data = df_master, facets = race ~ ., bins = 50)
 qplot(age, amount, data = df_master, facets = . ~ race, geom = c("point", "smooth"))
 qplot(age, amount, data = df_master, facets = . ~ race) + 
   geom_smooth()
 
-hist(df_master$amount, breaks = 100) # bill amount is right skewed, take log(amount)
-qplot(log(amount), data = df_master, color = gender, geom = "density") 
-
-
-chisq.test(df_regression$sm5, df_regression$sm3)
-chisq.test(df_regression$sm5, df_regression$sm1)
-chisq.test(df_regression$sm5, df_regression$sm2)
-chisq.test(df_regression$sm5, df_regression$gender)
-chisq.test(df_regression$pom1, df_regression$sm2)
