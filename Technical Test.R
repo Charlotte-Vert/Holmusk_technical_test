@@ -5,13 +5,11 @@
 library(dplyr)
 library(ggplot2)
 library(eeptools) # convert date of birth into age
-library(gridExtra) # combine several graphs, need to delete
+library(gridExtra) # combine several graphs
 library(corrplot) # correlation plot
 library(leaps) # regsubsets() for regression
-library(reshape2) # melt function to change wide df to log format
-library(ggExtra)
+library(ggExtra) # plot histogram margin on scatterplot
  
-
 # Load four csv files into dataframes
 df_demographics <- read.csv(file = 'demographics.csv')          
 df_clinical <- read.csv(file = 'clinical_data.csv')
@@ -24,7 +22,7 @@ df_billamount <- read.csv(file = 'bill_amount.csv')
 str(df_clinical)
 summary(df_clinical)
 
-2# Medical_history_2 and medical_history_5 have missing values (N= 233 and 304)
+# Medical_history_2 and medical_history_5 have missing values (N= 233 and 304)
 prop.table(table(df_clinical$medical_history_2, exclude = NULL))
 prop.table(table(df_clinical$medical_history_5, exclude = NULL))
 # Medical_history_2: 7% is missing value, hence treat NA as a new category instead of imputation
@@ -129,7 +127,6 @@ df_master <- df_master %>%
 str(df_master)
 
 
-
 # 5. Hist for continuous variables -------------------------------------------
 
 # 5.1: bill amount
@@ -212,7 +209,7 @@ hist_age <- ggplot(df_master, aes(x = age)) +
 hist_LOS <- ggplot(df_master, aes(x = LOS)) +
   geom_histogram(aes(y = ..density..), color = 1, fill = "white") +
   geom_density(color = "red") +
-  labs(title = "Histogram of Length of Stay")
+  labs(title = "Histogram of length of stay")
 
 
 # 6. Barplot for categorical variables -----------------------------------
@@ -299,7 +296,7 @@ bar_mh7 <- ggplot(data = df_master, aes(x = medical_history_7, color = medical_h
   theme_minimal() +
   theme(legend.position = "bottom")
 
-grid.arrange(bar_mh1, bar_mh2, bar_mh3, bar_mh4, bar_mh5, bar_mh6, bar_mh7, nrow = 2)
+grid.arrange(bar_mh1, bar_mh2, bar_mh3, bar_mh4, bar_mh5, bar_mh6, bar_mh7, nrow = 3)
 
 # 6.3: preop medication
 bar_pom1 <- ggplot(data = df_master, aes(x = preop_medication_1, color = preop_medication_1)) +
@@ -368,14 +365,12 @@ bar_sm3 <- ggplot(data = df_master, aes(x = symptom_3, color = symptom_3)) +
   theme_minimal() +
   theme(legend.position = "bottom")
 
-
 bar_sm4 <- ggplot(data = df_master, aes(x = symptom_4, color = symptom_4)) +
   geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
   ylab("Proportions") +
   ylim(0, 1) +
   theme_minimal() +
   theme(legend.position = "bottom")
-
 
 bar_sm5 <- ggplot(data = df_master, aes(x = symptom_5, color = symptom_5)) +
   geom_bar(aes(y = (..count..)/sum(..count..)), fill = "white") +
@@ -387,32 +382,7 @@ bar_sm5 <- ggplot(data = df_master, aes(x = symptom_5, color = symptom_5)) +
 grid.arrange(bar_sm1, bar_sm2, bar_sm3, bar_sm4, bar_sm5, nrow = 2)
 
 
-# Proportions for categorical variables
-prop.table(table(df_master$medical_history_1)) # 17% yes
-prop.table(table(df_master$medical_history_2)) # 7% yes, not balanced
-prop.table(table(df_master$medical_history_3)) # 14% yes
-prop.table(table(df_master$medical_history_4)) # 5% yes, not balanced
-prop.table(table(df_master$medical_history_5)) # 6% yes, 9% NA, not balanced
-prop.table(table(df_master$medical_history_6)) # 25% yes
-prop.table(table(df_master$medical_history_7)) # 25% yes
-
-prop.table(table(df_master$preop_medication_1)) # 50.4% yes
-prop.table(table(df_master$preop_medication_2)) # 59.1% yes
-prop.table(table(df_master$preop_medication_3)) # 82% yes
-prop.table(table(df_master$preop_medication_4)) # 52% yes
-prop.table(table(df_master$preop_medication_5)) # 82% yes
-prop.table(table(df_master$preop_medication_6)) # 74% yes
-
-prop.table(table(df_master$symptom_1)) # 62% yes
-prop.table(table(df_master$symptom_2)) # 66% yes
-prop.table(table(df_master$symptom_3)) # 54% yes
-prop.table(table(df_master$symptom_4)) # 73% yes
-prop.table(table(df_master$symptom_5)) # 53% yes
-
-
 # 7. Univariate analysis -------------------------------------------------
-
-# Correlation between x variables and y
 
 # Correlation Matrix for Continuous variables
 df_continuous <- df_master[,c(4, 27:34)] %>%
@@ -478,23 +448,24 @@ result <- cbind(model_summary$which, round(cbind(rsq=model_summary$rsq,
                                        bic=model_summary$bic, 
                                        rss=model_summary$rss), 3))
 
+# Plot curves for BIC, Cp, Adjusted R2 and RSS
 par(mfrow = c(2,2))
 plot(model_summary$bic)
 plot(model_summary$cp)
 plot(model_summary$adjr2)
 plot(model_summary$rss)
+par(mfrow = c(1,1))
 
-
-# pick model #13 as the final model considering a balance of low bic, low cp, low rss and high adjusted r square
+# pick model #14 as the final model considering a balance of low bic, low cp, low rss and high adjusted r square
 result[14,]
 # gender, race, resident status, mh1, mh6, sm1, sm2, sm3, sm4, sm5, bmi, age 
 model1 <- lm(log_amount ~ gender + race + resident_status + mh1 + mh6 + sm1 + sm2 + sm3 +
                sm4 + sm5 + bmi + age,
             data = df_regression)
-
+# Diagnostic plot for Model 1
 plot(model1)
 
-# Sensitivity analysis: remove outliers in bill amoun
+# Sensitivity analysis: remove outliers in bill amount
 Q1 <- quantile(df_master$amount, .25)
 Q3 <- quantile(df_master$amount, .75)
 IQR <- IQR(df_master$amount)
@@ -519,7 +490,6 @@ no_amount_outliers <- rename(no_amount_outliers,
                         'sm3' = 'symptom_3',
                         'sm4' = 'symptom_4',
                         'sm5' = 'symptom_5')
-
 m_allsub2 <-regsubsets(amount ~ ., data = no_amount_outliers, method = 'backward',
                       nbest=1, nvmax=33)
 model_summary2 <- summary(m_allsub2)
@@ -528,17 +498,20 @@ result2 <- cbind(model_summary2$which, round(cbind(rsq=model_summary2$rsq,
                                                  cp=model_summary2$cp, 
                                                  bic=model_summary2$bic, 
                                                  rss=model_summary2$rss), 3))
+par(mfrow = c(2,2))
 plot(model_summary2$bic)
 plot(model_summary2$cp)
 plot(model_summary2$adjr2)
 plot(model_summary2$rss)
-#pick model #13
-result2[13,]
-# race, resident status, mh1, mh6, sm1, sm2, sm3, sm4, sm5, bmi, age 
+par(mfrow = c(1,1))
+
+#pick model #14
+result2[14,]
+# gender, race, resident status, mh1, mh6, sm1, sm2, sm3, sm4, sm5, bmi, age 
 mfinal2 <- lm(amount ~ race + resident_status + mh1 + mh6 + sm1 + sm2 + sm3 +
                sm4 + sm5 + bmi + age,
              data = no_amount_outliers)
-
+# Removing outliers in bill amount makes no difference in variable selection
 
 # 9.  Amount versus significant variables ---------------------------------
 
@@ -627,12 +600,4 @@ amount_sm5 <- ggplot(df_regression, aes(x = sm5, y = log_amount, fill = sm5))+
 grid.arrange(amount_mh1, amount_mh6, amount_sm1, amount_sm2, amount_sm3, 
              amount_sm4, amount_sm5, nrow = 1)
 
-# 0. Backup ---------------------------------------------------------------
-
-qplot(gender, amount, data = df_master, geom = "boxplot")
-qplot(amount, data = df_master, fill = race, bins = 50)
-qplot(amount, data = df_master, facets = race ~ ., bins = 50)
-qplot(age, amount, data = df_master, facets = . ~ race, geom = c("point", "smooth"))
-qplot(age, amount, data = df_master, facets = . ~ race) + 
-  geom_smooth()
 
