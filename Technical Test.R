@@ -10,6 +10,7 @@ library(corrplot) # correlation plot
 library(leaps) # regsubsets() for regression
 <<<<<<< HEAD
 library(ggExtra) # plot histogram margin on scatterplot
+<<<<<<< HEAD
 library(naniar) # use mcar_test() to check hypothesis of MCAR
 =======
 library(reshape2) # melt function to change wide df to log format
@@ -17,6 +18,9 @@ library(ggExtra)
  
 >>>>>>> parent of 1ec6367 (Submission)
 
+=======
+ 
+>>>>>>> parent of 2b88c9f (final submission)
 # Load four csv files into dataframes
 df_demographics <- read.csv(file = 'demographics.csv')          
 df_clinical <- read.csv(file = 'clinical_data.csv')
@@ -29,18 +33,19 @@ df_billamount <- read.csv(file = 'bill_amount.csv')
 str(df_clinical)
 summary(df_clinical)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 
 2# Medical_history_2 and medical_history_5 have missing values (N= 233 and 304)
 >>>>>>> parent of 1ec6367 (Submission)
+=======
+
+# Medical_history_2 and medical_history_5 have missing values (N= 233 and 304)
+>>>>>>> parent of 2b88c9f (final submission)
 prop.table(table(df_clinical$medical_history_2, exclude = NULL))
 prop.table(table(df_clinical$medical_history_5, exclude = NULL))
-# Medical_history_2 and medical_history_5 have missing values (N= 233 (7%) and 304 (9%))
-
-mcar_test(df_clinical) # p value = 0.315, fail to reject hypothesis of MCAR
-df_clinical_naomit <- na.omit(df_clinical) # remove NA values and use df_clinical_naomit for sensitivity analysis
-
-# proceed with treating NA as another level
+# Medical_history_2: 7% is missing value, hence treat NA as a new category instead of imputation
+# Medical_history_5: 9% is missing value, hence treat NA as a new category instead of imputation
 
 # Medical_history_3 coded in chr
 unique(df_clinical$medical_history_3)
@@ -141,10 +146,14 @@ df_master <- df_master %>%
 str(df_master)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 
 
 >>>>>>> parent of 1ec6367 (Submission)
+=======
+
+>>>>>>> parent of 2b88c9f (final submission)
 # 5. Hist for continuous variables -------------------------------------------
 
 # 5.1: bill amount

@@ -1,0 +1,26 @@
+{
+    "id": "EF7985AC",
+    "path": "~/Documents/GitHub/Holmusk_technical_test/Technical Test.R",
+    "project_path": "Technical Test.R",
+    "type": "r_source",
+    "hash": "3532013762",
+    "contents": "",
+    "dirty": false,
+    "created": 1644505676061.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "384,74",
+        "scrollLine": "53"
+    },
+    "folds": "1|18|18|0|\n19|32|51|0|\n52|31|81|0|\n82|43|98|0|\n99|34|128|0|\n129|35|213|0|\n214|39|383|0|\n384|25|412|0|\n",
+    "lastKnownWriteTime": 1644589113,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1644589119231,
+    "read_only": false,
+    "read_only_alternatives": []
+}
