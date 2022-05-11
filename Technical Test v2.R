@@ -39,6 +39,11 @@ df_clinical <- df_clinical %>%
                                     'Yes'= '1',
                                     'No'= '0'))
 
+df_clinical_naomit <- df_clinical_naomit %>%
+  mutate(medical_history_3 = recode(medical_history_3, 
+                                    'Yes'= '1',
+                                    'No'= '0'))
+
 # Code medical histories, preop_medications and symptoms as factor of 0/1
 clinical_col = seq(4,21,1) # convert 4th to 21st columns to factor
 for (x in clinical_col) {
@@ -52,6 +57,17 @@ df_clinical <- df_clinical %>%
          LOS = date_of_discharge - date_of_admission)
 df_clinical$LOS <- as.numeric(df_clinical$LOS)
 
+clinical_naomit_col = seq(4,21,1) # convert 4th to 21st columns to factor
+for (x in clinical_naomit_col) {
+  df_clinical_naomit[,x] <- factor(df_clinical_naomit[,x], exclude = NULL)
+}
+
+# Create a new column for length of stay (LOS) and code in numeric format
+df_clinical_naomit <- df_clinical_naomit %>%
+  mutate(date_of_admission = as.Date(date_of_admission), 
+         date_of_discharge = as.Date(date_of_discharge),
+         LOS = date_of_discharge - date_of_admission)
+df_clinical_naomit$LOS <- as.numeric(df_clinical_naomit$LOS)
 
 # 2. Cleaning demographics.csv --------------------------------------------
 
@@ -106,6 +122,10 @@ df_bill <- df_bill %>%
 df_clinical <- rename(df_clinical, 'patient_id' = 'id')
 df_master <- merge(df_bill, df_clinical, by=c('patient_id', 'date_of_admission'))
 
+df_clinical_naomit <- rename(df_clinical_naomit, 'patient_id' = 'id')
+df_master_naomit <- merge(df_bill, df_clinical_naomit, by=c('patient_id', 'date_of_admission'))
+
+
 # Create new column for re-admission status and bmi
 df_master <- df_master %>%
   arrange(patient_id, date_of_admission) %>%
@@ -117,9 +137,23 @@ df_master <- df_master %>%
 df_master$readmitted_status[is.na(df_master$readmitted_status)] <- 0
 df_master$readmitted_status <- factor(df_master$readmitted_status)
 
+df_master_naomit <- df_master_naomit %>%
+  arrange(patient_id, date_of_admission) %>%
+  group_by(patient_id) %>%
+  mutate(daysSinceLast = as.integer(date_of_admission - lag(date_of_discharge))) %>%
+  ungroup() %>%
+  mutate(readmitted_status = if_else(daysSinceLast >=0, 1, 0)) %>%
+  mutate(bmi = weight/(height*height)*10000)
+df_master_naomit$readmitted_status[is.na(df_master_naomit$readmitted_status)] <- 0
+df_master_naomit$readmitted_status <- factor(df_master_naomit$readmitted_status)
+
 # Merge data from demographics.csv
 df_master <- merge(df_master, df_demographics, by = 'patient_id')
 df_master <- df_master[-c(35,29)] # delete unused columns: date_of_birth & daysSinceLast
+
+df_master_naomit <- merge(df_master_naomit, df_demographics, by = 'patient_id')
+df_master_naomit <- df_master_naomit[-c(35,29)] # delete unused columns: date_of_birth & daysSinceLast
+
 
 # Move categorical variables to the front and continuous/discrete variables to the back
 df_master <- df_master %>%
@@ -129,6 +163,11 @@ df_master <- df_master %>%
   
 str(df_master)
 
+
+df_master_naomit <- df_master_naomit %>%
+  relocate(date_of_discharge, .before = amount) %>%
+  relocate(readmitted_status, gender, race, resident_status, 
+           .before = medical_history_1)
 # 5. Hist for continuous variables -------------------------------------------
 
 # 5.1: bill amount
@@ -440,6 +479,31 @@ df_regression <- rename(df_regression,
                         'sm4' = 'symptom_4',
                         'sm5' = 'symptom_5')
 
+df_regression_naomit <- df_master_naomit %>%
+  mutate(amount = log(amount))
+df_regression_naomit <- df_regression_naomit[, -c(1,2,3,30,31)] # remove patient id, date of admission, discharge, weight and height
+df_regression_naomit <- rename(df_regression_naomit, 
+                        'log_amount' = 'amount',
+                        'mh1' = 'medical_history_1',
+                        'mh2' = 'medical_history_2',
+                        'mh3' = 'medical_history_3',
+                        'mh4' = 'medical_history_4',
+                        'mh5' = 'medical_history_5',
+                        'mh6' = 'medical_history_6',
+                        'mh7' = 'medical_history_7',
+                        'pom1' = 'preop_medication_1',
+                        'pom2' = 'preop_medication_2',
+                        'pom3' = 'preop_medication_3',
+                        'pom4' = 'preop_medication_4',
+                        'pom5' = 'preop_medication_5',
+                        'pom6' = 'preop_medication_6',
+                        'sm1' = 'symptom_1',
+                        'sm2' = 'symptom_2',
+                        'sm3' = 'symptom_3',
+                        'sm4' = 'symptom_4',
+                        'sm5' = 'symptom_5')
+
+
 # use all possible subsets approach
 m_allsub <-regsubsets(log_amount ~ ., data = df_regression,
                       nbest=1, nvmax=33)
@@ -450,6 +514,18 @@ result <- cbind(model_summary$which, round(cbind(rsq=model_summary$rsq,
                                        bic=model_summary$bic, 
                                        rss=model_summary$rss), 3))
 
+lm(log_amount ~ sm1+sm2+sm3+sm4+sm5+mh1+mh6+age+bmi+gender+race+resident_status, 
+   data = df_regression)
+
+m_allsub_naomit <-regsubsets(log_amount ~ ., data = df_regression_naomit,
+                      nbest=1, nvmax=33)
+model_summary_naomit <- summary(m_allsub_naomit)
+result_naomit <- cbind(model_summary_naomit$which, round(cbind(rsq=model_summary_naomit$rsq, 
+                                                 adjr2=model_summary_naomit$adjr2, 
+                                                 cp=model_summary_naomit$cp, 
+                                                 bic=model_summary_naomit$bic, 
+                                                 rss=model_summary_naomit$rss), 3))
+
 # Plot curves for BIC, Cp, Adjusted R2 and RSS
 par(mfrow = c(2,2))
 plot(model_summary$bic)
@@ -457,6 +533,14 @@ plot(model_summary$cp)
 plot(model_summary$adjr2)
 plot(model_summary$rss)
 par(mfrow = c(1,1))
+
+par(mfrow = c(2,2))
+plot(model_summary_naomit$bic)
+plot(model_summary_naomit$cp)
+plot(model_summary_naomit$adjr2)
+plot(model_summary_naomit$rss)
+par(mfrow = c(1,1))
+# No difference in sensitivity analysis
 
 # pick model #14 as the final model considering a balance of low bic, low cp, low rss and high adjusted r square
 result[14,]
